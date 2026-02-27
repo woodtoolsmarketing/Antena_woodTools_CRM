@@ -1,0 +1,15 @@
+# Sesiones de WhatsApp (Node.js y Python)
+.wwebjs_auth/
+Sesiones_WhatsApp/
+
+# Entornos y librerías
+node_modules/
+venv/
+__pycache__/
+
+# Base de datos local
+estado_whatsapp.db
+*.sqlite3
+
+# Archivos de sistema
+.DS_Store
