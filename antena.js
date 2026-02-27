@@ -6,10 +6,8 @@ const sqlite3 = require('sqlite3').verbose();
 
 const DB_PATH = './estado_whatsapp.db';
 
-// 1. Funciones para hablar con la Base de Datos de Python
 function actualizarEstado(id_vendedor, estado) {
     let db = new sqlite3.Database(DB_PATH);
-    // Vuelve a poner la barra original para la base de datos (Ej: "0_A" a "0_A", "1_302" a "1/302")
     let id_original = id_vendedor.replace('_', '/');
     db.run(`UPDATE vendedores SET estado = ? WHERE numero = ?`, [estado, id_original]);
     db.close();
@@ -23,7 +21,6 @@ function registrarChatLocal(id_vendedor, telefono) {
     db.close();
 }
 
-// 2. Lee los vendedores desde el archivo dinámico que crea Python
 let vendedores = {};
 try {
     vendedores = JSON.parse(fs.readFileSync('./vendedores.json', 'utf8'));
@@ -48,7 +45,7 @@ async function iniciarSistema() {
 
         client.on('ready', () => {
             console.log(`✅ Sesión lista: Vendedor ${id_vendedor}`);
-            actualizarEstado(id_vendedor, '🟢'); // Le avisa al Gestor visual!
+            actualizarEstado(id_vendedor, '✅'); // <-- AHORA ES UN TIC VERDE
         });
 
         client.on('disconnected', () => {
@@ -63,7 +60,6 @@ async function iniciarSistema() {
             const nombre = contact.name || contact.pushname || "Desconocido";
             const tel_limpio = msg.from.replace('@c.us', '');
 
-            // Avisar a Flask (para Google Sheets)
             try {
                 await axios.post('http://localhost:5000/webhook-qr', {
                     vendedor_id: id_vendedor.replace('_', '/'),
@@ -73,7 +69,6 @@ async function iniciarSistema() {
                 });
             } catch (error) {}
 
-            // Avisar a la BD local (Para el conteo en pantalla)
             registrarChatLocal(id_vendedor, tel_limpio);
         });
 
