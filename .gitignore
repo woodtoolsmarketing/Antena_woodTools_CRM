@@ -13,3 +13,6 @@ estado_whatsapp.db
 
 # Archivos de sistema
 .DS_Store
+
+package-lock.json
+package.json
