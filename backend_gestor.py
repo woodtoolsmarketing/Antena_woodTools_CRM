@@ -6,8 +6,18 @@ import json
 from datetime import datetime
 import subprocess 
 
+# --- Importaciones nuevas para leer Google Sheets ---
+import gspread
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request 
+
 DB_NAME = "estado_whatsapp.db"
 JSON_NODE = "vendedores.json"
+
+# --- Configuración de Google Sheets ---
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/drive.readonly']
+ARCHIVO_TOKEN = "token.json"
 
 # Números limpios y IDs actualizados a 0-A y 0-B
 VENDEDORES_INICIALES = [
@@ -22,6 +32,26 @@ VENDEDORES_INICIALES = [
     ("0-B", "Carlos Bolec", "1165630406", "Recepción B"),
     ("01/302", "Emmanuel Capalbo", "1157528428", "Zona 1/302")
 ]
+
+def obtener_credenciales():
+    creds = None
+    if os.path.exists(ARCHIVO_TOKEN):
+        creds = Credentials.from_authorized_user_file(ARCHIVO_TOKEN, SCOPES)
+        
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            try: creds.refresh(Request())
+            except Exception: creds = None
+                
+        if not creds or not creds.valid:
+            if not os.path.exists("credenciales.json"): return None
+            flow = InstalledAppFlow.from_client_secrets_file("credenciales.json", SCOPES)
+            creds = flow.run_local_server(port=0)
+            
+        with open(ARCHIVO_TOKEN, 'w') as token:
+            token.write(creds.to_json())
+            
+    return creds
 
 def actualizar_json_node(numero, telefono):
     num_limpio = numero.replace('/', '_') 
@@ -213,3 +243,63 @@ def exportar_reporte_excel():
     
     os.startfile(nombre_reporte)
     return True, nombre_reporte
+
+def obtener_metricas_publicidad_emmanuel():
+    try:
+        creds = obtener_credenciales()
+        if not creds: return None, "Falta el archivo credenciales.json para conectar a Google Sheets."
+        
+        gc = gspread.authorize(creds)
+        sh = gc.open("Base de datos wt")
+        
+        try:
+            ws = sh.worksheet("Base_de_prospectos")
+        except gspread.exceptions.WorksheetNotFound:
+            return None, "No se encontró la pestaña 'Base_de_prospectos' en el Google Sheets."
+            
+        datos_brutos = ws.get_all_values()
+        if len(datos_brutos) < 2: return {}, "La hoja de prospectos está vacía."
+        
+        headers = datos_brutos[0]
+        df = pd.DataFrame(datos_brutos[1:], columns=headers)
+        
+        # Identificar qué columna tiene la fecha/hora
+        col_fecha = next((c for c in ["Marca temporal", "Fecha", "Fecha y hora", "Timestamp"] if c in df.columns), None)
+        if not col_fecha:
+            # Por defecto asumimos la primera columna de la planilla
+            col_fecha = headers[0]
+            
+        # Filtrar solo aquellas filas que contengan "Quiero más información" en alguna parte
+        mask_ad = df.astype(str).apply(lambda x: x.str.contains("Quiero más información", case=False, na=False)).any(axis=1)
+        df_ads = df[mask_ad].copy()
+        
+        if df_ads.empty:
+            return {}, "No hay datos de publicidades registradas en la planilla ('Quiero más información')."
+            
+        # Convertir a formato de tiempo para extraer la hora
+        df_ads['datetime_real'] = pd.to_datetime(df_ads[col_fecha], dayfirst=True, errors='coerce')
+        df_ads = df_ads.dropna(subset=['datetime_real'])
+        
+        df_ads['Fecha_str'] = df_ads['datetime_real'].dt.strftime('%Y-%m-%d')
+        df_ads['Hora'] = df_ads['datetime_real'].dt.hour
+        
+        # Crear franjas horarias de 3 horas
+        bins = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+        labels = ["00:00 - 03:00", "03:00 - 06:00", "06:00 - 09:00", "09:00 - 12:00",
+                  "12:00 - 15:00", "15:00 - 18:00", "18:00 - 21:00", "21:00 - 24:00"]
+        df_ads['Franja'] = pd.cut(df_ads['Hora'], bins=bins, labels=labels, right=False)
+        
+        resultados = {}
+        # Agrupar por día
+        for fecha, group in df_ads.groupby('Fecha_str'):
+            franjas = group['Franja'].value_counts().reindex(labels, fill_value=0).to_dict()
+            resultados[fecha] = {
+                "total": int(len(group)),
+                "franjas": franjas
+            }
+            
+        # Ordenar de fecha más reciente a más antigua
+        res_ordenados = dict(sorted(resultados.items(), key=lambda x: x[0], reverse=True))
+        return res_ordenados, "OK"
+    except Exception as e:
+        return None, str(e)

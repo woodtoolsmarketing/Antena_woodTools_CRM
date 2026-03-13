@@ -5,7 +5,7 @@ a = Analysis(
     ['frontend_gestor.py'],
     pathex=[],
     binaries=[],
-    datas=[('Imagenes', 'Imagenes')],
+    datas=[],
     hiddenimports=['pandas', 'openpyxl'],
     hookspath=[],
     hooksconfig={},
@@ -35,5 +35,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['Imagenes\\logo.ico'],
 )
