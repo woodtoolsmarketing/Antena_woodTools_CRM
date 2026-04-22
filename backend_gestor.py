@@ -75,6 +75,15 @@ def inicializar_db():
     cursor.execute('''CREATE TABLE IF NOT EXISTS actividad_diaria (
                         id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, numero_vendedor TEXT, telefono_cliente TEXT)''')
     
+    # --- NUEVA TABLA PARA BACKUP DE CHATS ---
+    cursor.execute('''CREATE TABLE IF NOT EXISTS backup_mensajes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                        numero_vendedor TEXT, 
+                        telefono_cliente TEXT, 
+                        tipo_mensaje TEXT, 
+                        contenido TEXT, 
+                        fecha_hora TEXT)''')
+    
     cursor.execute("SELECT COUNT(*) FROM vendedores")
     if cursor.fetchone()[0] == 0:
         for v in VENDEDORES_INICIALES:
@@ -120,7 +129,8 @@ def obtener_actividad_vendedor_hoy(numero_vendedor):
 def subir_a_github_y_reiniciar(nombre_vendedor, accion="Añadido"):
     mensajes = []
     try:
-        subprocess.run(["pm2", "restart", "Antena_WoodTools"], check=True, capture_output=True, shell=True)
+        # CAMBIO PARA CPU FÍSICO CON WINDOWS: Se usa pm2.cmd en lugar de pm2
+        subprocess.run(["pm2.cmd", "restart", "Antena_WoodTools"], check=True, capture_output=True, shell=True)
         mensajes.append("🔄 Antena Node.js reiniciada. Aplicando cambios...")
     except Exception as e:
         mensajes.append("⚠️ No se pudo reiniciar PM2 automáticamente.")
